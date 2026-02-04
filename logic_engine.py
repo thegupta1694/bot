@@ -17,7 +17,7 @@ def generate_section_logic(file_object, api_key, model_name, section_index, tota
         http_client=custom_http_client
     )
 
-    next_section_start = f"S{section_index + 1}_Q1" if section_index < total_sections else "SUBMIT"
+    next_section_id = f"S{section_index + 1}_Q1" if section_index < total_sections else "SUBMIT"
 
     prompt = f"""
     You are a Senior Survey Programmer. Your task is to convert the provided HTML survey specification into a structured JSON Logic Map.
@@ -78,4 +78,5 @@ def generate_section_logic(file_object, api_key, model_name, section_index, tota
     except json.JSONDecodeError as e:
 
         raise Exception(f"AI returned invalid JSON: {e}")
+
 
