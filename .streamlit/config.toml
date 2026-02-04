@@ -1,0 +1,8 @@
+[server]
+maxMessageSize = 1000
+enableCORS = false
+enableXsrfProtection = false
+headless = true
+
+[browser]
+gatherUsageStats = false
