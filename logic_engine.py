@@ -23,15 +23,17 @@ def generate_section_logic(file_object, api_key, model_name, section_index, tota
     You are a Senior Survey Programmer. Convert this HTML survey spec into a JSON Logic Map.
     This is SECTION {section_index} of {total_sections}.
 
+    ### MANDATORY ID FORMAT:
+    - Every question ID MUST start with 'S{section_index}_'. 
+    - Example: 'S{section_index}_Q1', 'S{section_index}_Q2'.
+    - DO NOT use plain 'Q1'.
+
+    ### SECTION LINKING:
+    - If a question is the last one in this document, its 'next_destination' MUST be '{next_section_start}'.
+    
     ### CRITICAL RULES FOR OPTION TEXT:
     1. **CLEAN LABELS ONLY:** The 'text' field for options must contain ONLY the literal text a respondent sees. 
-    2. **STRIP META-DATA:** You MUST remove markers like '[TERMINATE]', '[QUALIFY]', or color-coded instructions.
-    3. **LOGIC EXTRACTION:** Use the stripped markers ONLY to set the 'next_destination' and 'is_terminate' fields.
-
-    ### ARCHITECTURAL RULES:
-    1. **Sequential Default:** If no skip is mentioned, 'next_destination' is the NEXT question.
-    2. **ID Format:** Use 'S{section_index}_Qn'.
-    3. **Section Linking:** The last question of this doc should point to "{next_section_start}".
+    2. **STRIP META-DATA:** Remove markers like '[TERMINATE]' or '[QUALIFY]'.
 
     ### OUTPUT JSON STRUCTURE:
     {{
@@ -40,9 +42,8 @@ def generate_section_logic(file_object, api_key, model_name, section_index, tota
           "id": "S{section_index}_Q1",
           "text": "Clean question text",
           "type": "single-select | multi-select | text-input",
-          "show_if": "Logic description or null",
           "options": [
-            {{ "text": "Clean Option Label", "next_destination": "S_Qn/TERMINATE/{next_section_start}", "is_terminate": bool }}
+            {{ "text": "Clean Option Label", "next_destination": "S{section_index}_Qn | {next_section_start} | TERMINATE", "is_terminate": bool }}
           ]
         }}
       ]
@@ -66,4 +67,5 @@ def generate_section_logic(file_object, api_key, model_name, section_index, tota
         logic_data["section_id"] = section_index
         return logic_data
     except json.JSONDecodeError as e:
+
         raise Exception(f"AI returned invalid JSON: {e}")
