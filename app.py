@@ -123,7 +123,14 @@ if all(files) and api_key:
                             section_num, 
                             num_sections
                         )
-                        master_questions.extend(section_data.get("questions", []))
+                        
+                        # VALIDATION: Ensure the AI actually returned questions
+                        qs = section_data.get("questions", [])
+                        if not qs:
+                            st.error(f"Section {section_num} returned no questions. Check if the model '{model_choice}' is hallucinating the JSON structure.")
+                            return # Stop execution
+                        
+                        master_questions.extend(qs)
                     
                     st.session_state.logic_map = {"questions": master_questions}
                     st.success("Logic Stitched Successfully!")
@@ -252,4 +259,5 @@ if "logic_map" in st.session_state:
             status.success(f"Audit Complete. {len(selected_rows)} cases processed.")
 else:
     if not api_key:
+
         st.warning("Please enter your API Key in the sidebar to begin.")
