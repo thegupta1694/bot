@@ -2,37 +2,45 @@ from playwright.sync_api import sync_playwright
 import time
 
 def run_audit(survey_url, persona_steps):
+    """
+    Automated Survey Auditor Runner
+    Simulates a respondent based on a specific logical path.
+    """
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True) 
+        # Launch with specific flags to prevent memory crashes on hosted environments like Render
+        browser = p.chromium.launch(
+            headless=True, 
+            args=["--disable-dev-shm-usage", "--no-sandbox"]
+        ) 
         context = browser.new_context(viewport={'width': 1280, 'height': 800})
         page = context.new_page()
         
         steps_completed = 0
         last_clicked = "None"
         final_error = None
-        clicked_elements_registry = [] # Keep track of specific element IDs we've used
+        clicked_elements_registry = [] 
 
         try:
+            # Navigate to survey
             page.goto(survey_url, wait_until="networkidle", timeout=60000)
             
             for answer in persona_steps:
-                # 1. Check for end screen
+                # 1. Check for end screen (Terminate or Submit)
                 body_text = page.inner_text("body").lower()
-                if any(x in body_text for x in ["thank you", "recorded", "unfortunately", "disqualified"]):
+                if any(x in body_text for x in ["thank you", "recorded", "unfortunately", "disqualified", "completed"]):
                     break 
 
                 # 2. Advanced Selection Logic
-                # We look for labels or buttons that match the text
-                # We filter to ensure we don't click the same exact radio button twice
+                # We use Playwright's 'text=' selector which is the most robust way 
+                # to find labels regardless of the underlying HTML (div, span, p, etc.)
                 found_click = False
                 
-                # Try specific selectors that Qualtrics/Google Forms use for options
                 selectors = [
-                    f"label:has-text('{answer}')",
-                    f"span:has-text('{answer}')",
-                    f"button:has-text('{answer}')",
-                    f"div[role='radio']:has-text('{answer}')",
-                    f"div[role='checkbox']:has-text('{answer}')"
+                    f"text='{answer}'",               # Exact text match
+                    f"label:has-text('{answer}')",    # Standard label
+                    f"button:has-text('{answer}')",   # Button-style option
+                    f"span:has-text('{answer}')",     # Span inside a div
+                    f"[aria-label*='{answer}']"       # Accessibility label
                 ]
 
                 for selector in selectors:
@@ -42,7 +50,7 @@ def run_audit(survey_url, persona_steps):
                     for i in range(count):
                         candidate = candidates.nth(i)
                         
-                        # Get a unique internal ID for this element to avoid re-clicking
+                        # Generate a unique ID based on text and position to avoid re-clicking
                         element_id = str(candidate.evaluate("node => node.innerText + node.getBoundingClientRect().top"))
                         
                         if candidate.is_visible() and element_id not in clicked_elements_registry:
@@ -53,41 +61,38 @@ def run_audit(survey_url, persona_steps):
                             last_clicked = answer
                             steps_completed += 1
                             found_click = True
-                            time.sleep(0.5) # Wait for Qualtrics JS to register click
+                            # Small pause for Qualtrics JS to register the radio selection
+                            time.sleep(0.8) 
                             break
                     if found_click: break
 
-                if not found_click:
-                    # If we can't find the answer, maybe it's on the next page
-                    # Attempt to click Next to see if it reveals the question
-                    next_btn = page.locator('#NextButton, #next-button, [aria-label="Next"]').first
-                    if next_btn.is_visible():
-                        next_btn.click()
-                        page.wait_for_load_state("networkidle")
-                        time.sleep(1)
-                        continue # Re-try current answer on the new page
-                    else:
-                        break # Truly stuck
-
-                # 3. Intelligent "Next" Navigation
-                # We only click Next if the current page seems "finished" 
-                # or if we need to trigger validation to see if more questions exist.
-                next_btn = page.locator('#NextButton, #next-button, [aria-label="Next"]').first
+                # 3. Intelligent Navigation
+                # We look for various "Next" button patterns found in Qualtrics and other platforms
+                next_selectors = [
+                    '#NextButton', 
+                    '#next-button', 
+                    '[aria-label="Next"]', 
+                    'button:has-text("Next page")', 
+                    'button:has-text("Next")',
+                    '.NextButton',
+                    'input[value="Next"]'
+                ]
+                
+                # Combine selectors into one query
+                next_btn = page.locator(", ".join(next_selectors)).first
+                
                 if next_btn.is_visible():
-                    # Get page "signature" before clicking
-                    pre_click_text = page.inner_text("body")
-                    
                     next_btn.click()
-                    page.wait_for_load_state("networkidle")
-                    time.sleep(1.2) # Essential for Qualtrics transitions
-                    
-                    # Check if the page actually changed
-                    post_click_text = page.inner_text("body")
-                    
-                    # If the page didn't change (e.g., validation error because 
-                    # there's another question on the same page), we don't count it as a failure.
-                    # The loop will continue and try to find the next 'answer' on the same page.
-                    pass 
+                    # Wait for the next page to load
+                    try:
+                        page.wait_for_load_state("networkidle", timeout=5000)
+                    except:
+                        pass # Continue if networkidle takes too long
+                    time.sleep(1.5) # Essential for Qualtrics UI transitions
+                
+                elif not found_click:
+                    # If we didn't find the answer AND there's no Next button, we are truly stuck
+                    break
 
         except Exception as e:
             final_error = str(e)
