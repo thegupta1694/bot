@@ -20,22 +20,27 @@ def generate_section_logic(file_object, api_key, model_name, section_index, tota
     next_section_start = f"S{section_index + 1}_Q1" if section_index < total_sections else "SUBMIT"
 
     prompt = f"""
-    You are a Senior Survey Programmer. Convert this HTML survey spec into a JSON Logic Map.
+    You are a Senior Survey Programmer. Your task is to convert the provided HTML survey specification into a structured JSON Logic Map.
     This is SECTION {section_index} of {total_sections}.
 
-    ### MANDATORY ID FORMAT:
-    - Every question ID MUST start with 'S{section_index}_'. 
-    - Example: 'S{section_index}_Q1', 'S{section_index}_Q2'.
-    - DO NOT use plain 'Q1'.
+    ### 1. IDENTITY & STITCHING RULES (CRITICAL)
+    - **Namespace:** Every Question ID in this file MUST follow the format: `S{section_index}_Qn`.
+    - **Starting Point:** The first question of this document MUST be named `S{section_index}_Q1`.
+    - **Exit Strategy:** 
+        - If a question is the final question of this section, its 'next_destination' must be "{next_section_id}".
+        - If an option leads to a disqualification, 'next_destination' must be "TERMINATE" and 'is_terminate' must be true.
 
-    ### SECTION LINKING:
-    - If a question is the last one in this document, its 'next_destination' MUST be '{next_section_start}'.
-    
-    ### CRITICAL RULES FOR OPTION TEXT:
-    1. **CLEAN LABELS ONLY:** The 'text' field for options must contain ONLY the literal text a respondent sees. 
-    2. **STRIP META-DATA:** Remove markers like '[TERMINATE]' or '[QUALIFY]'.
+    ### 2. MECE LOGIC PRINCIPLES
+    - **Mutually Exclusive:** Ensure each option has exactly one 'next_destination'. No overlapping logic.
+    - **Collectively Exhaustive:** Every single option provided in the spec must be mapped. If the spec implies "All others go to X", you must explicitly map every remaining option to destination X.
+    - **Sequential Fallback:** If the spec does not specify a skip for an option, the 'next_destination' should be the next logical question ID (e.g., S{section_index}_Q1 -> S{section_index}_Q2).
 
-    ### OUTPUT JSON STRUCTURE:
+    ### 3. UI-READY CONTENT RULES
+    - **Literal Labels Only:** The 'text' field for options must contain ONLY the literal text a respondent sees on the screen.
+    - **Strip Meta-Data:** You MUST remove markers like '[TERMINATE]', '[QUALIFY]', '[GOTO QX]', or color-coded instructions from the 'text' field.
+    - **Logic Extraction:** Use those stripped markers ONLY to populate the 'next_destination' and 'is_terminate' fields.
+
+    ### 4. OUTPUT JSON STRUCTURE
     {{
       "questions": [
         {{
@@ -43,13 +48,17 @@ def generate_section_logic(file_object, api_key, model_name, section_index, tota
           "text": "Clean question text",
           "type": "single-select | multi-select | text-input",
           "options": [
-            {{ "text": "Clean Option Label", "next_destination": "S{section_index}_Qn | {next_section_start} | TERMINATE", "is_terminate": bool }}
+            {{ 
+              "text": "Literal Option Label", 
+              "next_destination": "S{section_index}_Qn | {next_section_id} | TERMINATE", 
+              "is_terminate": boolean 
+            }}
           ]
         }}
       ]
     }}
 
-    ### SPEC CONTENT:
+    ### SURVEY SPECIFICATION CONTENT:
     {html_content}
     """
 
@@ -69,3 +78,4 @@ def generate_section_logic(file_object, api_key, model_name, section_index, tota
     except json.JSONDecodeError as e:
 
         raise Exception(f"AI returned invalid JSON: {e}")
+
