@@ -1,0 +1,7 @@
+streamlit
+openai
+httpx
+mammoth
+playwright
+python-dotenv
+pandas
