@@ -128,7 +128,7 @@ if all(files) and api_key:
                         qs = section_data.get("questions", [])
                         if not qs:
                             st.error(f"Section {section_num} returned no questions. Check if the model '{model_choice}' is hallucinating the JSON structure.")
-                            return # Stop execution
+                            st.stop()
                         
                         master_questions.extend(qs)
                     
@@ -261,3 +261,4 @@ else:
     if not api_key:
 
         st.warning("Please enter your API Key in the sidebar to begin.")
+
